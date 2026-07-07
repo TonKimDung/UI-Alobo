@@ -10,6 +10,7 @@ import { PlayerHomeScreen, PlayerSessionDetailScreen, PlayerMySessionsScreen, Le
 import { PlayerMatchesScreen, PlayerCreateChallengeScreen, PlayerChallengeDetailScreen, PlayerJoinMatchmakingScreen, PlayerMatchmakingDetailScreen } from "../screens/PlayerMatchScreens";
 import { OwnerMatchesScreen, OwnerCreateMatchmakingScreen, OwnerMatchmakingDetailScreen } from "../screens/OwnerMatchScreens";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { AdminShell } from "../screens/AdminScreen";
 
 export default function App() {
   const [role, setRole] = useState<Role>("owner");
@@ -207,7 +208,17 @@ export default function App() {
   const renderScreen = (): React.ReactNode => {
     switch (screen) {
       case "login":
-        return <LoginScreen onLogin={r => { setRole(r); setScreen(r === "owner" ? "owner-home" : "player-home"); setActiveTab("home"); }} onRegister={() => setScreen("register")} />;
+        return (
+          <div className="relative h-full">
+            <LoginScreen onLogin={r => { setRole(r); setScreen(r === "owner" ? "owner-home" : "player-home"); setActiveTab("home"); }} onRegister={() => setScreen("register")} />
+            <button
+              onClick={() => { setRole("admin"); setScreen("admin-dashboard"); }}
+              className="absolute left-6 right-6 bottom-6 py-3 rounded-2xl bg-[#111827] text-white text-[14px] font-bold shadow-lg"
+            >
+              Vào Admin Web Demo
+            </button>
+          </div>
+        );
       case "register":
         return <RegisterScreen onBack={() => setScreen("login")} onDone={() => { setScreen(role === "owner" ? "owner-home" : "player-home"); setActiveTab("home"); }} />;
       case "owner-home":
@@ -271,6 +282,10 @@ export default function App() {
         return null;
     }
   };
+
+  if (role === "admin") {
+    return <AdminShell sessions={sessions} onLogout={() => { setRole("owner"); setScreen("login"); }} />;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-600 flex items-center justify-center p-4">

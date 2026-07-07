@@ -30,6 +30,19 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
   const [ownerBankNumber, setOwnerBankNumber] = useState("0123456789");
   const [ownerExtraInfo, setOwnerExtraInfo] = useState("Chủ sân có thể tự thêm ghi chú, mô tả sân hoặc thông tin liên hệ tại đây.");
   const [isEditingOwnerProfile, setIsEditingOwnerProfile] = useState(false);
+  const [ownerVerificationStatus, setOwnerVerificationStatus] = useState<"draft" | "pending" | "verified">("pending");
+
+  const ownerEvidence = [
+    { label: "Giấy phép kinh doanh", status: "Đã upload", icon: "🏢" },
+    { label: "Hình ảnh sân", status: "5 ảnh", icon: "🖼️" },
+    { label: "Chứng chỉ huấn luyện", status: "Đã upload", icon: "🎓" },
+    { label: "Chứng chỉ trọng tài", status: "Chưa có", icon: "🧾" },
+    { label: "Bằng cấp / thành tích", status: "Đã upload", icon: "🏅" },
+    { label: "Google Maps / Fanpage", status: "Đã liên kết", icon: "🌐" },
+  ];
+
+  const ownerMonthlyPlayers = [92, 118, 136, 152, 171, 188];
+  const ownerTrustPercent = Math.round(Math.max(0, Math.min(1, Number(ownerTrustScore) || 0)) * 100);
 
   // Build player assessment history: sessions where PLAYER_ID has a score
   const assessments = sessions
@@ -115,9 +128,11 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
             <div className="px-4 py-3.5 border-b border-[#eef2ec] flex items-center justify-between">
               <div>
                 <p className="text-[11px] font-semibold text-[#7a8a79] uppercase tracking-wider" style={{ fontFamily: M }}>
-                  Hồ sơ chủ sân
+                  Verification Center
                 </p>
-                
+                <p className="text-[13px] text-[#5a6a59] mt-0.5" style={{ fontFamily: F }}>
+                  Bổ sung hồ sơ để Admin xác thực Trust Score.
+                </p>
               </div>
               <button
                 onClick={() => setIsEditingOwnerProfile(!isEditingOwnerProfile)}
@@ -128,22 +143,47 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
               </button>
             </div>
 
-            <div className="p-4 flex flex-col gap-3">
-              <div>
-                <p className="text-[11px] font-semibold text-[#7a8a79] mb-1" style={{ fontFamily: F }}>Trust Score</p>
-                
-                  <div className="bg-[#f6f9f6] rounded-xl px-3 py-2.5 border border-[#eef2ec]">
-                    <p className="text-[14px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{ownerTrustScore || "Chưa cập nhật"}</p>
+            <div className="p-4 flex flex-col gap-4">
+              <div className="bg-[#f6f9f6] rounded-2xl p-4 border border-[#eef2ec]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#7a8a79]" style={{ fontFamily: F }}>Trust Score</p>
+                    <p className="text-[30px] font-black text-[#006e26] leading-none mt-1" style={{ fontFamily: M }}>{ownerTrustScore}</p>
+                    <p className="text-[11px] text-[#7a8a79] mt-1" style={{ fontFamily: F }}>
+                      {ownerVerificationStatus === "verified" ? "Đã xác thực" : "Đang chờ Admin xác thực"}
+                    </p>
                   </div>
-                
+                  <div className="text-right">
+                    <div className="px-3 py-1.5 rounded-full bg-[#fff7ed] text-[#c2410c] text-[11px] font-bold" style={{ fontFamily: F }}>
+                      {ownerTrustScore && Number(ownerTrustScore) > 0.5 ? "Tự duyệt kết quả" : "Cần Admin duyệt"}
+                    </div>
+                    <p className="text-[10px] text-[#9aaa99] mt-2" style={{ fontFamily: F }}>
+                      Ngưỡng auto approve: &gt; 0.5
+                    </p>
+                  </div>
+                </div>
+                <div className="h-2 bg-white rounded-full overflow-hidden mt-3">
+                  <div className="h-full rounded-full bg-[#006e26]" style={{ width: `${ownerTrustPercent}%` }} />
+                </div>
               </div>
+
+              {isEditingOwnerProfile && (
+                <div>
+                  <p className="text-[11px] font-semibold text-[#7a8a79] mb-1" style={{ fontFamily: F }}>Trust Score</p>
+                  <IOSInput
+                    value={ownerTrustScore}
+                    onChange={(v: string) => setOwnerTrustScore(v)}
+                    placeholder="Nhập Trust Score, ví dụ 0.65"
+                  />
+                </div>
+              )}
 
               <div>
                 <p className="text-[11px] font-semibold text-[#7a8a79] mb-1" style={{ fontFamily: F }}>Bank Number</p>
                 {isEditingOwnerProfile ? (
                   <IOSInput
                     value={ownerBankNumber}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOwnerBankNumber(e.target.value)}
+                    onChange={(v: string) => setOwnerBankNumber(v)}
                     placeholder="Nhập số tài khoản ngân hàng"
                   />
                 ) : (
@@ -154,13 +194,32 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
               </div>
 
               <div>
+                <p className="text-[11px] font-semibold text-[#7a8a79] mb-2" style={{ fontFamily: F }}>Minh chứng chủ sân</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {ownerEvidence.map(item => (
+                    <button key={item.label} className="bg-[#f6f9f6] rounded-2xl border border-[#eef2ec] px-3 py-3 text-left active:scale-[0.98] transition-transform">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[16px]">{item.icon}</span>
+                        <p className="text-[12px] font-semibold text-[#1a1a1a] leading-tight" style={{ fontFamily: F }}>{item.label}</p>
+                      </div>
+                      <p className={`text-[10px] mt-1 font-semibold ${item.status === "Chưa có" ? "text-[#dc2626]" : "text-[#006e26]"}`} style={{ fontFamily: M }}>
+                        {item.status}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+                <button className="w-full mt-2 py-3 rounded-2xl border border-dashed border-[#bdd6bd] text-[#006e26] text-[13px] font-bold bg-[#f6f9f6]" style={{ fontFamily: F }}>
+                  + Upload minh chứng mới
+                </button>
+              </div>
+
+              <div>
                 <p className="text-[11px] font-semibold text-[#7a8a79] mb-1" style={{ fontFamily: F }}>Thông tin thêm</p>
                 {isEditingOwnerProfile ? (
                   <IOSTextarea
                     value={ownerExtraInfo}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setOwnerExtraInfo(e.target.value)}
+                    onChange={(v: string) => setOwnerExtraInfo(v)}
                     placeholder="Tự thêm thông tin chủ sân"
-                    rows={3}
                   />
                 ) : (
                   <div className="bg-[#f6f9f6] rounded-xl px-3 py-2.5 border border-[#eef2ec]">
@@ -170,6 +229,14 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={() => setOwnerVerificationStatus("pending")}
+                className="w-full py-3.5 rounded-2xl bg-[#006e26] text-white text-[14px] font-bold shadow-[0_4px_14px_rgba(0,110,38,0.25)]"
+                style={{ fontFamily: F }}
+              >
+                Gửi hồ sơ xác thực Trust Score
+              </button>
             </div>
           </div>
         )}

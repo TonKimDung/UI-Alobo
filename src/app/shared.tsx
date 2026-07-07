@@ -22,7 +22,7 @@ export const PLAYER_AVATAR = pAvatar2;
 export const OWNER_VENUE = "CLB Thể Thao Phú Mỹ Hưng";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export type Role = "owner" | "player";
+export type Role = "owner" | "player" | "admin";
 export type ApprovalType = "auto" | "manual";
 export type SessionStatus = "open" | "in_progress" | "completed" | "cancelled";
 export type RegStatus = "pending" | "confirmed" | "rejected";
@@ -63,7 +63,8 @@ export type Screen =
   | "owner-matches" | "owner-create-matchmaking" | "owner-matchmaking-detail"
   | "player-home" | "player-my-sessions" | "player-session-detail" | "player-scores"
   | "player-matches" | "player-create-challenge" | "player-challenge-detail" | "player-join-matchmaking" | "player-matchmaking-detail"
-  | "leaderboard" | "profile";
+  | "leaderboard" | "profile"
+  | "admin-dashboard";
 
 // ─── Match types ──────────────────────────────────────────────────────────────
 export type ChallengeStatus = "invited" | "confirmed" | "declined" | "completed";
