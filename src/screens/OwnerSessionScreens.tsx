@@ -1,10 +1,10 @@
 import { useState } from "react";
 import type React from "react";
 import {
-  G, F, M, CRITERIA, SCORE_LABELS, SCORE_COLORS, SCORE_BG, PLAYER_AVATARS, PLAYER_LEVELS, MIN_PARTICIPANTS, EQUAL_WEIGHTS, CANCEL_DAYS_BEFORE,
+  G, F, M, PLAYER_AVATARS, PLAYER_LEVELS, MIN_PARTICIPANTS, CANCEL_DAYS_BEFORE,
   PLAYER_ID, PLAYER_NAME, PLAYER_AVATAR, OWNER_VENUE, bgTexture, imgCourt, loginSvg, pAvatar1, pAvatar2, pAvatar3, pAvatar4, scoreAvatar,
   canModifySession, daysUntil, computeScore, scoreToPercent, getSkillLevel, BADMINTON_LEVELS, RACKET_LEVELS,
-  SkillLevelBadge, Logo, IOSInput, IOSTextarea, Btn, BackBtn, StatusDot, ScoreBadge, TabBar,
+  SkillLevelBadge, Logo, IOSInput, IOSTextarea, Btn, BackBtn, StatusDot, TabBar,
   type Role, type ApprovalType, type Sport, type Session, type Registration, type ChallengeStatus, type ChallengeMatch, type MatchmakingSession, type MatchPair, type MatchPlayer, type MatchFormat, type RegStatus, type SkillLevel
 } from "../app/shared";
 import { formatFee } from "./PlayerSessionScreens";
@@ -13,6 +13,112 @@ export type CreateDraft = {
   title: string; description: string; date: string; time: string;
   sport: Sport; approvalType: ApprovalType; maxParticipants: string; fee: string;
   scorerName: string;
+};
+
+
+const ASSESSMENT_CRITERIA_GROUPS = [
+  {
+    title: "Kỹ thuật",
+    weight: 30,
+    desc: "Các kỹ năng đánh bóng nền tảng",
+    items: [
+      { id: "forehand", name: "Đánh thuận tay", sub: "Cú thuận tay", emoji: "🎯", weight: 7.5 },
+      { id: "backhand", name: "Đánh trái tay", sub: "Cú trái tay", emoji: "↩️", weight: 7.5 },
+      { id: "serve", name: "Giao bóng", sub: "Giao bóng", emoji: "🚀", weight: 7.5 },
+      { id: "volleyNetPlay", name: "Đánh trên lưới", sub: "Xử lý trên lưới", emoji: "🥅", weight: 7.5 },
+    ],
+  },
+  {
+    title: "Kiểm soát & ổn định",
+    weight: 25,
+    desc: "Khả năng kiểm soát hướng, độ sâu và hạn chế lỗi",
+    items: [
+      { id: "directionalControl", name: "Kiểm soát hướng bóng", sub: "Kiểm soát hướng bóng", emoji: "🧭", weight: 8.33 },
+      { id: "depthControl", name: "Kiểm soát độ sâu", sub: "Kiểm soát độ sâu", emoji: "📏", weight: 8.33 },
+      { id: "errorRate", name: "Hạn chế lỗi tự đánh hỏng", sub: "Tỷ lệ lỗi thấp", emoji: "✅", weight: 8.34 },
+    ],
+  },
+  {
+    title: "Di chuyển & vị trí",
+    weight: 20,
+    desc: "Di chuyển, phán đoán và hồi vị sau cú đánh",
+    items: [
+      { id: "footwork", name: "Di chuyển chân", sub: "Bộ chân / di chuyển", emoji: "👟", weight: 6.67 },
+      { id: "anticipation", name: "Khả năng phán đoán", sub: "Phán đoán tình huống", emoji: "👀", weight: 6.67 },
+      { id: "recovery", name: "Khả năng trở về vị trí", sub: "Hồi vị sau cú đánh", emoji: "🔄", weight: 6.66 },
+    ],
+  },
+  {
+    title: "Tư duy trận đấu",
+    weight: 15,
+    desc: "Lựa chọn cú đánh, nhận thức sân và thích nghi",
+    items: [
+      { id: "shotSelection", name: "Lựa chọn cú đánh", sub: "Chọn cú đánh phù hợp", emoji: "🧠", weight: 5 },
+      { id: "courtAwareness", name: "Quan sát và bao quát sân", sub: "Nhận thức không gian sân", emoji: "📍", weight: 5 },
+      { id: "adaptability", name: "Khả năng thích nghi chiến thuật", sub: "Thích nghi chiến thuật", emoji: "🧩", weight: 5 },
+    ],
+  },
+  {
+    title: "Hiệu suất thi đấu",
+    weight: 10,
+    desc: "Xử lý áp lực và thể lực",
+    items: [
+      { id: "pressureHandling", name: "Bản lĩnh khi chịu áp lực", sub: "Xử lý áp lực", emoji: "🔥", weight: 5 },
+      { id: "stamina", name: "Thể lực", sub: "Thể lực duy trì", emoji: "⚡", weight: 5 },
+    ],
+  },
+];
+
+const ASSESSMENT_CRITERIA = ASSESSMENT_CRITERIA_GROUPS.flatMap(g => g.items);
+const DEFAULT_SKILL_WEIGHTS = Object.fromEntries(ASSESSMENT_CRITERIA.map(c => [c.id, c.weight]));
+
+const SKILL_SCORE_LABELS: Record<number, string> = {
+  1: "Rất yếu",
+  2: "Yếu",
+  3: "Cơ bản",
+  4: "Tạm ổn",
+  5: "Trung bình",
+  6: "Khá",
+  7: "Tốt",
+  8: "Rất tốt",
+  9: "Xuất sắc",
+  10: "Vượt trội",
+};
+
+const skillScoreLabel = (score: number) => {
+  if (!Number.isFinite(score) || score < 0) return "Chưa nhập";
+  if (score >= 9) return "Xuất sắc";
+  if (score >= 8) return "Rất tốt";
+  if (score >= 7) return "Tốt";
+  if (score >= 6) return "Khá";
+  if (score >= 5) return "Trung bình";
+  if (score >= 4) return "Tạm ổn";
+  if (score >= 3) return "Cơ bản";
+  if (score >= 2) return "Yếu";
+  return "Rất yếu";
+};
+
+const skillScoreColor = (score: number) => {
+  if (!Number.isFinite(score) || score < 0) return "#9ca3af";
+  if (score >= 8) return "#006e26";
+  if (score >= 6) return "#2f855a";
+  if (score >= 4) return "#b7791f";
+  return "#dc2626";
+};
+
+const skillScoreBg = (score: number) => {
+  if (!Number.isFinite(score) || score < 0) return "#f3f4f6";
+  if (score >= 8) return "#e8f5ee";
+  if (score >= 6) return "#ecfdf5";
+  if (score >= 4) return "#fffbeb";
+  return "#fef2f2";
+};
+
+const normalizeSkillScoreInput = (raw: string) => {
+  if (raw.trim() === "") return -1;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return -1;
+  return Math.max(0, Math.min(10, Math.round(n * 10) / 10));
 };
 
 export function CreateStep1({ onBack, onSave }: {
@@ -101,7 +207,7 @@ export function CreateStep2({ draft, onBack, onSave }: {
   onBack: () => void;
   onSave: (weights: Record<string, number>) => void;
 }) {
-  const [weights, setWeights] = useState<Record<string, number>>(EQUAL_WEIGHTS);
+  const [weights, setWeights] = useState<Record<string, number>>(DEFAULT_SKILL_WEIGHTS);
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   const isValid = total === 100;
 
@@ -109,7 +215,7 @@ export function CreateStep2({ draft, onBack, onSave }: {
     setWeights(p => ({ ...p, [id]: Math.max(0, Math.min(100, val)) }));
   };
 
-  const balance = () => setWeights(EQUAL_WEIGHTS);
+  const balance = () => setWeights(DEFAULT_SKILL_WEIGHTS);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-[#f6f9f6]">
@@ -140,10 +246,10 @@ export function CreateStep2({ draft, onBack, onSave }: {
         <div className="bg-[#fffbeb] border border-[#fde68a] rounded-2xl p-3.5 flex gap-2.5">
           <span className="text-lg">💡</span>
           <div>
-            <p className="text-[#92400e] text-[12px] font-semibold" style={{ fontFamily: F }}>Thang điểm 1–5</p>
+            <p className="text-[#92400e] text-[12px] font-semibold" style={{ fontFamily: F }}>Thang điểm 1–10</p>
             <p className="text-[#92400e] text-[11px] mt-0.5" style={{ fontFamily: F }}>
-              Yếu · Trung bình · Khá · Tốt · Xuất sắc<br />
-              Trọng số 5 tiêu chí phải tổng = 100%
+              1 là thấp nhất · 10 là cao nhất<br />
+              Trọng số 15 tiêu chí theo backend phải tổng = 100%
             </p>
           </div>
         </div>
@@ -152,13 +258,13 @@ export function CreateStep2({ draft, onBack, onSave }: {
         <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 border border-[#eef2ec]">
           <span className="text-[13px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>Tổng trọng số</span>
           <div className="flex items-center gap-2">
-            <span className={`text-[18px] font-black ${isValid ? "text-[#006e26]" : "text-[#dc2626]"}`} style={{ fontFamily: M }}>{total}%</span>
+            <span className={`text-[18px] font-black ${isValid ? "text-[#006e26]" : "text-[#dc2626]"}`} style={{ fontFamily: M }}>{total}</span>
             <button onClick={balance} className="text-[11px] bg-[#e8f5ee] text-[#006e26] font-semibold px-2 py-1 rounded-lg" style={{ fontFamily: F }}>Cân bằng</button>
           </div>
         </div>
 
         {/* Criteria weight sliders */}
-        {CRITERIA.map(c => (
+        {ASSESSMENT_CRITERIA.map(c => (
           <div key={c.id} className="bg-white rounded-2xl p-4 border border-[#eef2ec]">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">{c.emoji}</span>
@@ -168,7 +274,7 @@ export function CreateStep2({ draft, onBack, onSave }: {
               </div>
               <div className="ml-auto w-12 h-8 rounded-xl flex items-center justify-center" style={{ background: isValid && weights[c.id] > 0 ? "#e8f5ee" : "#f3f4f6" }}>
                 <span className="font-black text-[14px]" style={{ fontFamily: M, color: isValid && weights[c.id] > 0 ? G : "#9a9a9a" }}>
-                  {weights[c.id]}%
+                  {weights[c.id]}
                 </span>
               </div>
             </div>
@@ -261,7 +367,7 @@ export function SessionCard({ session: s, onTap }: { session: Session; onTap: ()
         </span>
         <div className="flex-1" />
         <div className="h-1.5 w-20 bg-[#eef2ec] rounded-full overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: `${(confirmed / s.maxParticipants) * 100}%`, background: G }} />
+          <div className="h-full rounded-full" style={{ width: `${(confirmed / s.maxParticipants) * 100}`, background: G }} />
         </div>
         <span className="text-[10px] text-[#7a8a79]" style={{ fontFamily: F }}>{confirmed}/{s.maxParticipants}</span>
       </div>
@@ -575,11 +681,11 @@ export function SessionDetailOwner({ session, onBack, onScore, onApprove, onReje
         {/* Criteria summary */}
         <div className="bg-white border border-[#eef2ec] rounded-2xl p-4">
           <h3 className="text-[13px] font-bold text-[#1a1a1a] mb-3" style={{ fontFamily: F }}>Tiêu chí đánh giá</h3>
-          {CRITERIA.map(c => (
+          {ASSESSMENT_CRITERIA.map(c => (
             <div key={c.id} className="flex items-center gap-2 mb-2 last:mb-0">
               <span className="text-sm">{c.emoji}</span>
               <span className="flex-1 text-[12px] text-[#3a4a39]" style={{ fontFamily: F }}>{c.name}</span>
-              <span className="text-[12px] font-bold" style={{ fontFamily: M, color: G }}>{session.criteriaWeights[c.id]}%</span>
+              <span className="text-[12px] font-bold" style={{ fontFamily: M, color: G }}>{session.criteriaWeights[c.id]}</span>
             </div>
           ))}
         </div>
@@ -597,10 +703,13 @@ export function ScoringScreen({ session, userId, onBack, onSave }: {
   const sport: Sport = session.sport ?? "Cầu lông";
   const player = session.registrations.find(r => r.userId === userId)!;
   const [scores, setScores] = useState<Record<string, number>>(
-    session.scores[userId] ?? Object.fromEntries(CRITERIA.map(c => [c.id, 0]))
+    session.scores[userId] ?? Object.fromEntries(ASSESSMENT_CRITERIA.map(c => [c.id, -1]))
   );
-  const ws = computeScore(scores, session.criteriaWeights);
-  const allFilled = CRITERIA.every(c => scores[c.id] > 0);
+  const safeScores = Object.fromEntries(
+    ASSESSMENT_CRITERIA.map(c => [c.id, Number.isFinite(scores[c.id]) && scores[c.id] >= 0 ? scores[c.id] : 0])
+  ) as Record<string, number>;
+  const ws = computeScore(safeScores, session.criteriaWeights);
+  const allFilled = ASSESSMENT_CRITERIA.every(c => Number.isFinite(scores[c.id]) && scores[c.id] >= 0 && scores[c.id] <= 10);
   const lvl = getSkillLevel(ws, sport);
   const sportEmoji = sport === "Cầu lông" ? "🏸" : sport === "Tennis" ? "🎾" : "🏓";
 
@@ -655,34 +764,74 @@ export function ScoringScreen({ session, userId, onBack, onSave }: {
         </div>
 
         {/* Score each criterion */}
-        {CRITERIA.map(c => {
-          const val = scores[c.id] ?? 0;
-          return (
-            <div key={c.id} className="bg-white rounded-2xl p-4 border border-[#eef2ec]">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">{c.emoji}</span>
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{c.name}</p>
-                  <p className="text-[10px] text-[#7a8a79]" style={{ fontFamily: F }}>{c.sub} · Trọng số {session.criteriaWeights[c.id]}%</p>
-                </div>
-                {val > 0 && <ScoreBadge score={val} />}
+        {ASSESSMENT_CRITERIA_GROUPS.map(group => (
+          <div key={group.title} className="flex flex-col gap-2">
+            <div className="px-1 flex items-center justify-between">
+              <div>
+                <p className="text-[12px] font-black text-[#1a1a1a]" style={{ fontFamily: M }}>
+                  {group.title}
+                </p>
+                <p className="text-[10px] text-[#7a8a79]" style={{ fontFamily: F }}>
+                  {group.desc}
+                </p>
               </div>
-              {/* 5-button score selector */}
-              <div className="grid grid-cols-5 gap-1.5">
-                {[1, 2, 3, 4, 5].map(n => (
-                  <button key={n} onClick={() => setScores(p => ({ ...p, [c.id]: n }))}
-                    className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border-2 transition-all ${val === n ? "border-transparent" : "border-[#eef2ec]"}`}
-                    style={{ background: val === n ? SCORE_BG[n] : "transparent" }}>
-                    <span className="text-[16px] font-black" style={{ fontFamily: M, color: val === n ? SCORE_COLORS[n] : "#c0cdbf" }}>{n}</span>
-                    <span className="text-[8px] font-medium leading-tight text-center" style={{ fontFamily: F, color: val === n ? SCORE_COLORS[n] : "#b0b8b0" }}>{SCORE_LABELS[n]}</span>
-                  </button>
-                ))}
-              </div>
+              <span className="text-[10px] font-bold text-[#006e26] bg-[#e8f5ee] px-2 py-1 rounded-full" style={{ fontFamily: M }}>
+                {group.weight}%
+              </span>
             </div>
-          );
-        })}
 
-        <Btn onClick={() => onSave(scores)} disabled={!allFilled}>Lưu điểm</Btn>
+            {group.items.map(c => {
+              const val = scores[c.id] ?? 0;
+              return (
+                <div key={c.id} className="bg-white rounded-2xl p-4 border border-[#eef2ec]">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">{c.emoji}</span>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{c.name}</p>
+                    </div>
+                    {val > 0 && (
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-xl"
+                        style={{ fontFamily: M, color: skillScoreColor(val), background: skillScoreBg(val) }}>
+                        {val}
+                      </span>
+                    )}
+                  </div>
+                  {/* Decimal score input */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-[#f9fbf8] rounded-2xl border border-[#e5ebe4] focus-within:border-[#006e26] transition-colors px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={0.1}
+                          inputMode="decimal"
+                          placeholder="0.0"
+                          value={val >= 0 ? String(val) : ""}
+                          onChange={e => setScores(p => ({ ...p, [c.id]: normalizeSkillScoreInput(e.target.value) }))}
+                          className="w-full bg-transparent outline-none text-[22px] font-black text-[#1a1a1a] placeholder-[#c0cdbf]"
+                          style={{ fontFamily: M }}
+                        />
+                        <span className="text-[12px] font-semibold text-[#7a8a79]" style={{ fontFamily: F }}>/10</span>
+                      </div>
+                      
+                    </div>
+                    <div className="w-[86px] rounded-2xl px-2 py-3 text-center" style={{ background: skillScoreBg(val) }}>
+                      <p className="text-[18px] font-black leading-none" style={{ fontFamily: M, color: skillScoreColor(val) }}>
+                        {val >= 0 ? val : "—"}
+                      </p>
+                      <p className="text-[9px] font-semibold mt-1 leading-tight" style={{ fontFamily: F, color: skillScoreColor(val) }}>
+                        {skillScoreLabel(val)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+        <Btn onClick={() => onSave(safeScores)} disabled={!allFilled}>Lưu điểm</Btn>
         <div style={{ height: 8 }} />
       </div>
     </div>
@@ -740,11 +889,11 @@ export function SessionResultsScreen({ session, onBack }: { session: Session; on
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{r.name}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  {CRITERIA.map(c => (
-                    <span key={c.id} className="text-[9px]" title={`${c.name}: ${SCORE_LABELS[session.scores[r.userId]?.[c.id] ?? 0]}`}>{c.emoji}</span>
+                  {ASSESSMENT_CRITERIA.map(c => (
+                    <span key={c.id} className="text-[9px]" title={`${c.name}: ${session.scores[r.userId]?.[c.id] ?? 0}/10`}>{c.emoji}</span>
                   ))}
                   <span className="text-[10px] text-[#b0b8b0]" style={{ fontFamily: F }}>
-                    {CRITERIA.map(c => session.scores[r.userId]?.[c.id] ?? 0).join("-")}
+                    {ASSESSMENT_CRITERIA.map(c => session.scores[r.userId]?.[c.id] ?? 0).join("-")}
                   </span>
                 </div>
               </div>
