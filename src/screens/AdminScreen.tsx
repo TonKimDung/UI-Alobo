@@ -147,19 +147,32 @@ function AdminSidebar({ view, setView, onLogout }: { view: AdminView; setView: (
 
 function Dashboard({ sessions }: { sessions: Session[] }) {
   const pendingAssessments = sessions.filter(s => (s.status === "completed" || Object.keys(s.scores).length > 0)).length;
+  const totalMatches = sessions.reduce((total, session) => {
+    const confirmedPlayers = session.registrations.filter(r => r.status === "confirmed").length;
+    return total + Math.max(0, Math.floor(confirmedPlayers / 2));
+  }, 0);
+  const uniquePlayerIds = new Set(sessions.flatMap(session => session.registrations.map(registration => registration.userId)));
+  const uniqueOwners = new Set([
+    ...trustCases.map(court => court.ownerName),
+    ...sessions.map(session => session.ownerName).filter(Boolean),
+  ]);
+
   const cards = [
     { label: "Chờ xác thực sân", value: trustCases.filter(c => c.status === "pending").length, sub: "Trust Score" },
     { label: "Chờ duyệt đánh giá", value: pendingAssessments, sub: "Trust ≤ 0.5" },
     { label: "Sân đã xác thực", value: trustCases.filter(c => c.status === "verified").length, sub: "Verified" },
-    { label: "Tỉ lệ ổn định", value: "96%", sub: "Ít hủy / ít khiếu nại" },
+    { label: "Tổng số trận đấu được ghi nhận", value: totalMatches, sub: "Toàn hệ thống" },
+    { label: "Tổng số người chơi", value: uniquePlayerIds.size || 2486, sub: "Tài khoản vận động viên" },
+    { label: "Tổng số chủ sân", value: uniqueOwners.size || trustCases.length, sub: "Tài khoản chủ sân" },
   ];
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-[28px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>Dashboard kiểm duyệt</h2>
-        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Quản lý xác thực chủ sân và kết quả đánh giá trình độ.</p>
+        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Theo dõi hoạt động và quy mô của hệ thống ALOBO.</p>
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {cards.map(c => (
           <Card key={c.label} className="p-5">
             <p className="text-[13px] text-[#7a8a79]" style={{ fontFamily: F }}>{c.label}</p>
@@ -182,85 +195,158 @@ function Dashboard({ sessions }: { sessions: Session[] }) {
   );
 }
 
+type ManagedPlayer = {
+  id: string;
+  name: string;
+  sport: Sport;
+  elo: number;
+  level: string;
+};
+
+const INITIAL_MANAGED_PLAYERS: ManagedPlayer[] = [
+  { id: "player-01", name: "Nguyễn Minh Anh", sport: "Pickleball", elo: 1460, level: "3.5" },
+  { id: "player-02", name: "Trần Gia Huy", sport: "Cầu lông", elo: 1320, level: "B" },
+  { id: "player-03", name: "Lê Hoàng Nam", sport: "Tennis", elo: 1580, level: "4.0" },
+  { id: "player-04", name: "Phạm Khánh Linh", sport: "Pickleball", elo: 1210, level: "3.0" },
+];
+
 function TrustVerification() {
-  const [selected, setSelected] = useState<CourtTrustCase>(trustCases[0]);
-  const maxPlayers = Math.max(...selected.monthlyPlayers);
-  const stability = Math.round(((maxPlayers - selected.monthlyPlayers[0]) / Math.max(selected.monthlyPlayers[0], 1)) * 100);
+  const rankedCourts = [...trustCases].sort((a, b) => b.trustScore - a.trustScore);
+  const [selectedCourtId, setSelectedCourtId] = useState(rankedCourts[0].id);
+  const [assessmentPermissions, setAssessmentPermissions] = useState<Record<number, boolean>>(
+    Object.fromEntries(trustCases.map(court => [court.id, true]))
+  );
+  const [players, setPlayers] = useState<ManagedPlayer[]>(INITIAL_MANAGED_PLAYERS);
+  const [selectedPlayerId, setSelectedPlayerId] = useState(INITIAL_MANAGED_PLAYERS[0].id);
+
+  const selectedCourt = rankedCourts.find(court => court.id === selectedCourtId) ?? rankedCourts[0];
+  const selectedPlayer = players.find(player => player.id === selectedPlayerId) ?? players[0];
+  const assessmentEnabled = assessmentPermissions[selectedCourt.id] !== false;
+
+  const toggleAssessmentPermission = () => {
+    setAssessmentPermissions(prev => ({ ...prev, [selectedCourt.id]: !assessmentEnabled }));
+  };
+
+  const resetPlayerElo = () => {
+    setPlayers(prev => prev.map(player => (
+      player.id === selectedPlayer.id ? { ...player, elo: 1000, level: "Chưa xếp hạng" } : player
+    )));
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-[28px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>Xác thực Trust Score chủ sân</h2>
-        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Admin xem độ ổn định của sân và minh chứng chủ sân upload.</p>
+        <h2 className="text-[28px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>Bảng xếp hạng Trust Score</h2>
+        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Theo dõi thứ hạng sân và quản lý quyền tạo Assessment của chủ sân.</p>
       </div>
-      <div className="grid grid-cols-[1.1fr_0.9fr] gap-5">
+
+      <div className="grid grid-cols-[1.15fr_0.85fr] gap-5">
         <Card className="overflow-hidden">
-          <div className="grid grid-cols-[1.2fr_0.8fr_0.6fr_0.7fr_0.4fr] px-5 py-3 bg-[#f6f9f6] text-[12px] font-bold text-[#7a8a79]" style={{ fontFamily: M }}>
-            <span>Sân</span><span>Chủ sân</span><span>Trust</span><span>Trạng thái</span><span></span>
+          <div className="grid grid-cols-[0.35fr_1.3fr_0.9fr_0.65fr_0.85fr] px-5 py-3 bg-[#f6f9f6] text-[12px] font-bold text-[#7a8a79]" style={{ fontFamily: M }}>
+            <span>Hạng</span><span>Sân</span><span>Chủ sân</span><span>Trust</span><span>Quyền Assessment</span>
           </div>
-          {trustCases.map(c => (
-            <button key={c.id} onClick={() => setSelected(c)} className={`w-full grid grid-cols-[1.2fr_0.8fr_0.6fr_0.7fr_0.4fr] items-center px-5 py-4 border-t border-[#eef2ec] text-left ${selected.id === c.id ? "bg-[#e8f5ee]/60" : "bg-white"}`}>
-              <span className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>{c.courtName}</span>
-              <span className="text-[#5a6a59]" style={{ fontFamily: F }}>{c.ownerName}</span>
-              <span className="font-black" style={{ fontFamily: M, color: c.trustScore > 0.5 ? G : "#dc2626" }}>{c.trustScore.toFixed(2)}</span>
-              <span className="text-[12px] font-bold" style={{ fontFamily: F }}>{c.status === "pending" ? "Chờ duyệt" : c.status === "verified" ? "Đã xác thực" : "Từ chối"}</span>
-              <span className="text-[#006e26] font-bold" style={{ fontFamily: F }}>Xem</span>
-            </button>
-          ))}
+          {rankedCourts.map((court, index) => {
+            const enabled = assessmentPermissions[court.id] !== false;
+            return (
+              <button
+                key={court.id}
+                onClick={() => setSelectedCourtId(court.id)}
+                className={`w-full grid grid-cols-[0.35fr_1.3fr_0.9fr_0.65fr_0.85fr] items-center px-5 py-4 border-t border-[#eef2ec] text-left ${selectedCourt.id === court.id ? "bg-[#e8f5ee]/60" : "bg-white"}`}
+              >
+                <span className="font-black text-[#006e26]" style={{ fontFamily: M }}>#{index + 1}</span>
+                <span className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>{court.courtName}</span>
+                <span className="text-[#5a6a59]" style={{ fontFamily: F }}>{court.ownerName}</span>
+                <span className="font-black text-[#006e26]" style={{ fontFamily: M }}>{court.trustScore.toFixed(2)}</span>
+                <span className={`text-[12px] font-bold ${enabled ? "text-[#006e26]" : "text-[#dc2626]"}`} style={{ fontFamily: F }}>
+                  {enabled ? "Đang mở" : "Đã khóa"}
+                </span>
+              </button>
+            );
+          })}
         </Card>
 
         <Card className="p-5 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[12px] uppercase tracking-wider text-[#7a8a79]" style={{ fontFamily: M }}>Hồ sơ xác thực</p>
-              <h3 className="text-[22px] font-black text-[#1a1a1a] mt-1" style={{ fontFamily: F }}>{selected.courtName}</h3>
-              <p className="text-[#7a8a79]" style={{ fontFamily: F }}>{selected.ownerName}</p>
+              <p className="text-[12px] uppercase tracking-wider text-[#7a8a79]" style={{ fontFamily: M }}>Quản lý chủ sân</p>
+              <h3 className="text-[22px] font-black text-[#1a1a1a] mt-1" style={{ fontFamily: F }}>{selectedCourt.courtName}</h3>
+              <p className="text-[#7a8a79]" style={{ fontFamily: F }}>{selectedCourt.ownerName}</p>
             </div>
-            <TrustBadge score={selected.trustScore} />
+            <TrustBadge score={selectedCourt.trustScore} />
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {[
-              { l: "Người chơi/tháng", v: selected.monthlyPlayers.at(-1) },
-              { l: "Buổi đánh giá", v: selected.monthlySessions.reduce((a, b) => a + b, 0) },
-              { l: "Tỉ lệ hủy", v: `${selected.cancellationRate}%` },
-              { l: "Khiếu nại", v: `${selected.complaintRate}%` },
-            ].map(x => (
-              <div key={x.l} className="bg-[#f6f9f6] rounded-2xl p-3">
-                <p className="text-[11px] text-[#7a8a79]" style={{ fontFamily: F }}>{x.l}</p>
-                <p className="text-[20px] font-black text-[#006e26] mt-1" style={{ fontFamily: M }}>{x.v}</p>
+              { label: "Người chơi/tháng", value: selectedCourt.monthlyPlayers.at(-1) },
+              { label: "Buổi đánh giá", value: selectedCourt.monthlySessions.reduce((a, b) => a + b, 0) },
+              { label: "Tháng hoạt động", value: selectedCourt.operatingMonths },
+            ].map(item => (
+              <div key={item.label} className="bg-[#f6f9f6] rounded-2xl p-3">
+                <p className="text-[11px] text-[#7a8a79]" style={{ fontFamily: F }}>{item.label}</p>
+                <p className="text-[20px] font-black text-[#006e26] mt-1" style={{ fontFamily: M }}>{item.value}</p>
               </div>
             ))}
           </div>
 
-          <div>
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>Độ ổn định sân</p>
-              <p className="text-[12px] text-[#7a8a79]" style={{ fontFamily: F }}>Tăng {stability}% trong 6 tháng</p>
+          <div className="rounded-2xl border border-[#e6eee5] p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>Quyền tạo Assessment</p>
+              <p className="text-[12px] text-[#7a8a79] mt-1" style={{ fontFamily: F }}>
+                {assessmentEnabled ? "Chủ sân hiện có thể tạo buổi đánh giá." : "Chủ sân đang bị khóa quyền tạo buổi đánh giá."}
+              </p>
             </div>
-            <MiniChart values={selected.monthlyPlayers} />
-          </div>
-
-          <div>
-            <p className="font-bold text-[#1a1a1a] mb-3" style={{ fontFamily: F }}>Minh chứng chủ sân upload</p>
-            <div className="grid grid-cols-2 gap-2">
-              {selected.evidence.map(e => (
-                <div key={e.id} className="rounded-2xl border border-[#e6eee5] px-3 py-3 flex items-center justify-between">
-                  <span className="text-[13px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{e.label}</span>
-                  <span className={`text-[11px] font-bold ${e.status === "missing" ? "text-[#dc2626]" : "text-[#006e26]"}`} style={{ fontFamily: M }}>
-                    {e.status === "missing" ? "Thiếu" : e.status === "verified" ? "Verified" : "Uploaded"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            <button className="py-3 rounded-2xl bg-[#fee2e2] text-[#dc2626] font-bold" style={{ fontFamily: F }}>Từ chối</button>
-            
-            <button className="py-3 rounded-2xl bg-[#006e26] text-white font-bold" style={{ fontFamily: F }}>Chấp nhận</button>
+            <button
+              onClick={toggleAssessmentPermission}
+              className={`px-4 py-3 rounded-2xl font-bold ${assessmentEnabled ? "bg-[#fee2e2] text-[#dc2626]" : "bg-[#006e26] text-white"}`}
+              style={{ fontFamily: F }}
+            >
+              {assessmentEnabled ? "Khóa quyền" : "Mở quyền"}
+            </button>
           </div>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-[20px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>Quản lý ELO vận động viên</h3>
+            <p className="text-[12px] text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Chọn vận động viên để đưa ELO về mức mặc định 1000.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[1fr_0.75fr] gap-5">
+          <div className="rounded-3xl border border-[#e6eee5] overflow-hidden">
+            <div className="grid grid-cols-[1.2fr_0.7fr_0.55fr_0.55fr] px-4 py-3 bg-[#f6f9f6] text-[12px] font-bold text-[#7a8a79]" style={{ fontFamily: M }}>
+              <span>Vận động viên</span><span>Môn</span><span>Trình</span><span>ELO</span>
+            </div>
+            {players.map(player => (
+              <button
+                key={player.id}
+                onClick={() => setSelectedPlayerId(player.id)}
+                className={`w-full grid grid-cols-[1.2fr_0.7fr_0.55fr_0.55fr] items-center px-4 py-3 border-t border-[#eef2ec] text-left ${selectedPlayer.id === player.id ? "bg-[#e8f5ee]/70" : "bg-white"}`}
+              >
+                <span className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>{player.name}</span>
+                <span className="text-[#5a6a59]" style={{ fontFamily: F }}>{player.sport}</span>
+                <span className="font-bold text-[#006e26]" style={{ fontFamily: M }}>{player.level}</span>
+                <span className="font-black text-[#1a1a1a]" style={{ fontFamily: M }}>{player.elo}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="rounded-3xl bg-[#f6f9f6] p-5 flex flex-col justify-between">
+            <div>
+              <p className="text-[12px] uppercase tracking-wider text-[#7a8a79]" style={{ fontFamily: M }}>Vận động viên đã chọn</p>
+              <p className="text-[22px] font-black text-[#1a1a1a] mt-2" style={{ fontFamily: F }}>{selectedPlayer.name}</p>
+              <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>{selectedPlayer.sport} · Trình {selectedPlayer.level}</p>
+              <p className="text-[42px] font-black text-[#006e26] mt-5" style={{ fontFamily: M }}>{selectedPlayer.elo}</p>
+              <p className="text-[12px] text-[#7a8a79]" style={{ fontFamily: F }}>ELO hiện tại</p>
+            </div>
+            <button onClick={resetPlayerElo} className="w-full mt-5 py-3 rounded-2xl bg-[#fee2e2] text-[#dc2626] font-bold" style={{ fontFamily: F }}>
+              Reset ELO về 1000
+            </button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -354,6 +440,31 @@ function estimateElo(score: number) {
   return Math.round(600 + ((score - 1) / 4) * 1400);
 }
 
+type PlayerProfileData = {
+  currentElo: number;
+  winRate: number;
+  eloHistory: number[];
+  recentMatches: Array<{ opponent: string; result: "Thắng" | "Thua"; score: string; eloChange: number }>;
+  previousAssessments: Array<{ title: string; date: string; level: string; venue: string }>;
+};
+
+function buildPlayerProfile(playerName: string, currentElo: number, level: string, venue: string): PlayerProfileData {
+  return {
+    currentElo,
+    winRate: 64,
+    eloHistory: [currentElo - 95, currentElo - 62, currentElo - 70, currentElo - 28, currentElo - 12, currentElo],
+    recentMatches: [
+      { opponent: "Trần Quốc Bảo", result: "Thắng", score: "2–0", eloChange: 18 },
+      { opponent: "Nguyễn Minh Khang", result: "Thua", score: "1–2", eloChange: -12 },
+      { opponent: "Lê Tuấn Anh", result: "Thắng", score: "2–1", eloChange: 16 },
+    ],
+    previousAssessments: [
+      { title: "Đánh giá định kỳ tháng 05", date: "18/05/2026", level, venue },
+      { title: "Đánh giá đầu mùa", date: "12/02/2026", level, venue: "ALOBO Sports Center" },
+    ],
+  };
+}
+
 function AssessmentReview({ sessions }: { sessions: Session[] }) {
   const completed = sessions.filter(s => Object.keys(s.scores).length > 0 || s.status === "completed");
   const sourceSessions = completed.length > 0 ? completed : sessions;
@@ -374,6 +485,9 @@ function AssessmentReview({ sessions }: { sessions: Session[] }) {
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(scoredPlayers[0]?.userId ?? "");
   const activePlayer = scoredPlayers.find(p => p.userId === selectedPlayerId) ?? scoredPlayers[0];
+  const activeProfile = activePlayer
+    ? buildPlayerProfile(activePlayer.name, activePlayer.elo, activePlayer.scale.value, selected.venueName)
+    : null;
 
   const handleSelectSession = (id: number) => {
     const next = sourceSessions.find(s => s.id === id);
@@ -388,7 +502,7 @@ function AssessmentReview({ sessions }: { sessions: Session[] }) {
     <div className="space-y-6">
       <div>
         <h2 className="text-[28px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>Kiểm duyệt kết quả đánh giá</h2>
-        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Trust Score &gt; 0.5 thì tự duyệt, Trust Score ≤ 0.5 thì Admin xem qua rồi duyệt.</p>
+        <p className="text-[#7a8a79] mt-1" style={{ fontFamily: F }}>Kiểm tra kết quả Assessment và hồ sơ của từng người chơi tham gia.</p>
       </div>
 
       <div className="grid grid-cols-[0.95fr_1.25fr] gap-5">
@@ -436,11 +550,6 @@ function AssessmentReview({ sessions }: { sessions: Session[] }) {
               </div>
               <button className="px-4 py-2 rounded-xl bg-white border border-[#dfe9df] text-[#006e26] text-[13px] font-bold" style={{ fontFamily: F }}>Xem chứng chỉ</button>
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              {["Chứng chỉ HLV", "Chứng chỉ trọng tài", "Bằng cấp thể thao"].map(x => (
-                <div key={x} className="bg-white rounded-2xl px-3 py-2 text-[12px] font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>✓ {x}</div>
-              ))}
-            </div>
           </div>
 
           <div>
@@ -450,8 +559,8 @@ function AssessmentReview({ sessions }: { sessions: Session[] }) {
             </div>
 
             <div className="rounded-3xl border border-[#e6eee5] overflow-hidden">
-              <div className="grid grid-cols-[1.2fr_0.55fr_1.15fr_0.45fr] px-4 py-3 bg-[#f6f9f6] text-[12px] font-bold text-[#7a8a79]" style={{ fontFamily: M }}>
-                <span>Người tham gia</span><span>Điểm</span><span>Mô tả</span><span>ELO</span>
+              <div className="grid grid-cols-[1.25fr_0.55fr_1.15fr_0.5fr] px-4 py-3 bg-[#f6f9f6] text-[12px] font-bold text-[#7a8a79]" style={{ fontFamily: M }}>
+                <span>Người tham gia</span><span>Trình</span><span>Mô tả</span><span>Hồ sơ</span>
               </div>
               {scoredPlayers.length === 0 ? (
                 <div className="px-4 py-5 text-[#7a8a79]" style={{ fontFamily: F }}>Chưa có danh sách điểm cho buổi này.</div>
@@ -459,50 +568,85 @@ function AssessmentReview({ sessions }: { sessions: Session[] }) {
                 <button
                   key={player.userId}
                   onClick={() => setSelectedPlayerId(player.userId)}
-                  className={`w-full grid grid-cols-[1.2fr_0.55fr_1.15fr_0.45fr] items-center px-4 py-3 border-t border-[#eef2ec] text-left ${activePlayer?.userId === player.userId ? "bg-[#e8f5ee]/70" : "bg-white"}`}
+                  className={`w-full grid grid-cols-[1.25fr_0.55fr_1.15fr_0.5fr] items-center px-4 py-3 border-t border-[#eef2ec] text-left ${activePlayer?.userId === player.userId ? "bg-[#e8f5ee]/70" : "bg-white"}`}
                 >
                   <span className="font-bold text-[#1a1a1a]" style={{ fontFamily: F }}>{player.name}</span>
                   <span className="font-black text-[#006e26]" style={{ fontFamily: M }}>{player.scale.value}</span>
                   <span className="text-[13px] text-[#5a6a59]" style={{ fontFamily: F }}>{player.scale.desc}</span>
-                  <span className="font-bold text-[#1a1a1a]" style={{ fontFamily: M }}>{player.elo}</span>
+                  <span className="text-[12px] font-bold text-[#006e26]" style={{ fontFamily: F }}>Xem profile</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {activePlayer && (
-            <div className="rounded-3xl border border-[#e6eee5] p-4">
+          {activePlayer && activeProfile && (
+            <div className="rounded-3xl border border-[#e6eee5] p-5 space-y-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[12px] text-[#7a8a79]" style={{ fontFamily: F }}>Chi tiết điểm của</p>
-                  <p className="text-[20px] font-black text-[#1a1a1a]" style={{ fontFamily: F }}>{activePlayer.name}</p>
-                  <p className="text-[13px] text-[#5a6a59] mt-1" style={{ fontFamily: F }}>{selected.sport} · {activePlayer.scale.desc}</p>
+                  <p className="text-[12px] uppercase tracking-wider text-[#7a8a79]" style={{ fontFamily: M }}>Profile người chơi</p>
+                  <p className="text-[22px] font-black text-[#1a1a1a] mt-1" style={{ fontFamily: F }}>{activePlayer.name}</p>
+                  <p className="text-[13px] text-[#5a6a59] mt-1" style={{ fontFamily: F }}>{selected.sport} · Trình {activePlayer.scale.value}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[12px] text-[#7a8a79]" style={{ fontFamily: F }}>{selected.sport === "Tennis" ? "NTRP" : "Level"}</p>
-                  <p className="text-[34px] font-black text-[#006e26]" style={{ fontFamily: M }}>{activePlayer.scale.value}</p>
+                  <p className="text-[12px] text-[#7a8a79]" style={{ fontFamily: F }}>ELO hiện tại</p>
+                  <p className="text-[34px] font-black text-[#006e26]" style={{ fontFamily: M }}>{activeProfile.currentElo}</p>
                 </div>
               </div>
 
-              <div className="space-y-2 mt-4">
-                {CRITERIA.map(c => {
-                  const raw = selected.scores[activePlayer.userId]?.[c.id] ?? 0;
-                  return (
-                    <div key={c.id} className="flex items-center gap-3">
-                      <span>{c.emoji}</span>
-                      <span className="flex-1 text-[13px] text-[#5a6a59]" style={{ fontFamily: F }}>{c.name}</span>
-                      <span className="text-[12px] font-bold" style={{ fontFamily: M, color: SCORE_COLORS[raw] || "#6b7280" }}>{SCORE_LABELS[raw] || "–"}</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#f6f9f6] rounded-2xl p-4">
+                  <p className="text-[11px] text-[#7a8a79]" style={{ fontFamily: F }}>Tỷ lệ thắng</p>
+                  <p className="text-[26px] font-black text-[#006e26] mt-1" style={{ fontFamily: M }}>{activeProfile.winRate}%</p>
+                </div>
+                <div className="bg-[#f6f9f6] rounded-2xl p-4">
+                  <p className="text-[11px] text-[#7a8a79]" style={{ fontFamily: F }}>Assessment trước đó</p>
+                  <p className="text-[26px] font-black text-[#006e26] mt-1" style={{ fontFamily: M }}>{activeProfile.previousAssessments.length}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="font-bold text-[#1a1a1a] mb-2" style={{ fontFamily: F }}>Lịch sử biến động ELO</p>
+                <MiniChart values={activeProfile.eloHistory} />
+              </div>
+
+              <div>
+                <p className="font-bold text-[#1a1a1a] mb-3" style={{ fontFamily: F }}>Các trận đấu gần đây</p>
+                <div className="space-y-2">
+                  {activeProfile.recentMatches.map((match, index) => (
+                    <div key={`${match.opponent}-${index}`} className="grid grid-cols-[1fr_0.45fr_0.45fr_0.45fr] items-center rounded-2xl bg-[#f6f9f6] px-3 py-3">
+                      <span className="font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{match.opponent}</span>
+                      <span className={`text-[12px] font-bold ${match.result === "Thắng" ? "text-[#006e26]" : "text-[#dc2626]"}`} style={{ fontFamily: F }}>{match.result}</span>
+                      <span className="text-[12px] text-[#5a6a59]" style={{ fontFamily: M }}>{match.score}</span>
+                      <span className={`text-[12px] font-bold ${match.eloChange >= 0 ? "text-[#006e26]" : "text-[#dc2626]"}`} style={{ fontFamily: M }}>
+                        {match.eloChange >= 0 ? "+" : ""}{match.eloChange}
+                      </span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="font-bold text-[#1a1a1a] mb-3" style={{ fontFamily: F }}>Các Assessment trước đó</p>
+                <div className="space-y-2">
+                  {activeProfile.previousAssessments.map((assessment, index) => (
+                    <div key={`${assessment.title}-${index}`} className="rounded-2xl border border-[#e6eee5] px-3 py-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[#1a1a1a]" style={{ fontFamily: F }}>{assessment.title}</p>
+                        <p className="text-[11px] text-[#7a8a79] mt-1" style={{ fontFamily: F }}>{assessment.date} · {assessment.venue}</p>
+                      </div>
+                      <span className="px-3 py-1.5 rounded-full bg-[#e8f5ee] text-[#006e26] text-[12px] font-black" style={{ fontFamily: M }}>
+                        {assessment.level}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
 
           {needReview && !decision && (
-            <div className="grid grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-3 pt-2">
               <button onClick={() => setDecisionBySession(prev => ({ ...prev, [selected.id]: "rejected" }))} className="py-3 rounded-2xl bg-[#fee2e2] text-[#dc2626] font-bold" style={{ fontFamily: F }}>Từ chối</button>
-              
               <button onClick={() => setDecisionBySession(prev => ({ ...prev, [selected.id]: "approved" }))} className="py-3 rounded-2xl bg-[#006e26] text-white font-bold" style={{ fontFamily: F }}>Chấp nhận</button>
             </div>
           )}

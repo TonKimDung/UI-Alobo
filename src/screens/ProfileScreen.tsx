@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type React from "react";
+import { SelfAssessmentScreen } from "./SelfAssessmentScreen"; 
 import {
   G, F, M, CRITERIA, SCORE_LABELS, SCORE_COLORS, SCORE_BG, PLAYER_AVATARS, PLAYER_LEVELS, MIN_PARTICIPANTS, EQUAL_WEIGHTS, CANCEL_DAYS_BEFORE,
   PLAYER_ID, PLAYER_NAME, PLAYER_AVATAR, OWNER_VENUE, bgTexture, imgCourt, loginSvg, pAvatar1, pAvatar2, pAvatar3, pAvatar4, scoreAvatar,
@@ -24,6 +25,7 @@ const getEloFromScore = (ws: number) => {
 };
 
 export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessions: Session[]; onLogout: () => void }) {
+  const [showSelfAssessment, setShowSelfAssessment] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [ownerTrustScore, setOwnerTrustScore] = useState("0.65");
@@ -89,6 +91,10 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
   const name = isPlayer ? PLAYER_NAME : "Nguyễn Văn A";
   const avatar = isPlayer ? PLAYER_AVATAR : scoreAvatar;
 
+  if (showSelfAssessment) {
+    return <SelfAssessmentScreen onBack={() => setShowSelfAssessment(false)} />;
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-[#f6f9f6]">
       {/* Header */}
@@ -103,25 +109,28 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
           </div>
         </div>
 
-        {/* Player stats */}
-        {isPlayer && assessments.length > 0 && (
-          <div className="grid grid-cols-4 gap-2 mt-4">
-            {[
-              { v: currentElo ? String(currentElo) : "–", l: "ELO hiện tại" },
-              { v: String(assessments.length), l: "Buổi đánh giá" },
-              { v: String(new Set(assessments.map(a => a.session.venueName)).size), l: "Sân" },
-              { v: String(Object.keys(bestBySport).length), l: "Môn" },
-            ].map(s => (
-              <div key={s.l} className="bg-[#f6f9f6] rounded-xl p-2.5 text-center">
-                <p className="text-[#006e26] text-[18px] font-black" style={{ fontFamily: F }}>{s.v}</p>
-                <p className="text-[#9aaa99] text-[10px]" style={{ fontFamily: F }}>{s.l}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        
       </div>
 
       <div className="flex-1 px-4 py-4 flex flex-col gap-4">
+        {/* Self assessment entry — player only */}
+        {isPlayer && (
+          <button
+            onClick={() => setShowSelfAssessment(true)}
+            className="w-full bg-gradient-to-br from-[#006e26] to-[#159447] rounded-2xl px-4 py-4 text-left shadow-[0_6px_18px_rgba(0,110,38,0.22)] active:scale-[0.99] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center text-[22px]">🎯</div>
+              <div className="flex-1">
+                <p className="text-[15px] font-bold text-white" style={{ fontFamily: F }}>Tự đánh giá trình độ</p>  
+              </div>
+              <svg width="9" height="15" viewBox="0 0 9 15" fill="none">
+                <path d="M1 1L8 7.5L1 14" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </button>
+        )}
+
         {/* Owner profile — owner only */}
         {!isPlayer && (
           <div className="bg-white rounded-2xl border border-[#eef2ec] overflow-hidden">
@@ -412,4 +421,3 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
     </div>
   );
 }
-
