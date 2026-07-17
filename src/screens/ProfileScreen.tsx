@@ -13,7 +13,7 @@ const sportIcon = (sport?: Sport) => sport === "Cầu lông" ? "🏸" : sport ==
 
 const ratingSuffix = (sport?: Sport) => {
   if (sport === "Tennis") return "NTRP";
-  if (sport === "Pickleball") return "Level";
+  if (sport === "Pickleball") return "DURP";
   return "Level";
 };
 
@@ -265,10 +265,11 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
                     <p className="text-[11px] text-[#7a8a79] truncate" style={{ fontFamily: F }}>{venueName}</p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
-                    <span className="text-[20px] font-black" style={{ fontFamily: M, color: lvl.color }}>{elo}</span>
-                    <span className="text-[9px] font-medium" style={{ color: lvl.color, fontFamily: F }}>
-                      ELO · {lvl.label} {ratingSuffix(sport as Sport)}
+                    <span className="text-[12px] font-medium" style={{ color: lvl.color, fontFamily: F }}>
+                      {lvl.label} {ratingSuffix(sport as Sport)}
                     </span>
+                    <span className="text-[10px] font-black" style={{ fontFamily: M, color: lvl.color }}>{elo}</span>
+                    
                   </div>
                 </div>
               ))}
@@ -316,13 +317,14 @@ export function ProfileScreen({ role, sessions, onLogout }: { role: Role; sessio
                       {/* Level badge + chevron */}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <div className="flex flex-col items-end">
-                          <span className="text-[16px] font-black px-2.5 py-1 rounded-xl"
+                          <span className="text-[13px] font-semibold mt-0.5" style={{ fontFamily: F, color: lvl.color }}>
+                            {lvl.label} {ratingSuffix(s.sport)}
+                          </span>
+                          <span className="text-[10px] font-black px-2.5 py-1 rounded-xl"
                             style={{ fontFamily: M, color: lvl.color, background: lvl.bg }}>
                             {getEloFromScore(ws)} ELO
                           </span>
-                          <span className="text-[9px] font-semibold mt-0.5" style={{ fontFamily: F, color: lvl.color }}>
-                            {lvl.label} {ratingSuffix(s.sport)}
-                          </span>
+                          
                           <span
   className="text-[10px] font-bold mt-1"
   style={{
