@@ -7,8 +7,6 @@ import {
 import { LoginScreen, RegisterScreen } from "../screens/AuthScreens";
 import { CreateStep1, OwnerHomeScreen, EditSessionScreen, SessionDetailOwner, ScoringScreen, SessionResultsScreen, type CreateDraft } from "../screens/OwnerSessionScreens";
 import { PlayerHomeScreen, PlayerSessionDetailScreen, PlayerMySessionsScreen, LeaderboardScreen } from "../screens/PlayerSessionScreens";
-import { PlayerMatchesScreen, PlayerCreateChallengeScreen, PlayerChallengeDetailScreen, PlayerJoinMatchmakingScreen, PlayerMatchmakingDetailScreen } from "../screens/PlayerMatchScreens";
-import { OwnerMatchesScreen, OwnerCreateMatchmakingScreen, OwnerMatchmakingDetailScreen } from "../screens/OwnerMatchScreens";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { AdminShell } from "../screens/AdminScreen";
 
@@ -94,76 +92,7 @@ export default function App() {
     setScreen("player-matches");
   };
 
-  const handleChallengeAccept = () => {
-    setChallenges(prev => prev.map(c => c.id === activeChallengeId ? { ...c, status: "confirmed" } : c));
-    setScreen("player-matches");
-  };
-
-  const handleChallengeDecline = () => {
-    setChallenges(prev => prev.map(c => c.id === activeChallengeId ? { ...c, status: "declined" } : c));
-    setScreen("player-matches");
-  };
-
-  const handleJoinMatchmaking = (sessionId: number) => {
-    setMatchmaking(prev => prev.map(m => m.id !== sessionId ? m : {
-      ...m, registrations: [...m.registrations, { userId: PLAYER_ID, name: PLAYER_NAME, avatar: PLAYER_AVATAR, level: "Khá", elo: 1550 }]
-    }));
-  };
-
-  const handleCreateMatchmakingSession = (m: Omit<MatchmakingSession, "id" | "registrations" | "matches">) => {
-    const newM: MatchmakingSession = { ...m, id: Date.now(), registrations: [], matches: [] };
-    setMatchmaking(prev => [newM, ...prev]);
-    setScreen("owner-matches");
-  };
-
-  const handleArrangeMatches = () => {
-    setMatchmaking(prev => prev.map(m => {
-      if (m.id !== activeMatchmakingId) return m;
-      const sorted = [...m.registrations].sort((a, b) => (b.elo ?? 0) - (a.elo ?? 0));
-      const pairs: MatchPair[] = [];
-
-      if (m.format === "singles") {
-        // Pair adjacent players by ELO
-        for (let i = 0; i + 1 < sorted.length; i += 2) {
-          const courtIndex = (pairs.length % m.numCourts) + 1;
-          pairs.push({
-            id: pairs.length + 1,
-            court: `Sân ${courtIndex}`,
-            team1: [{ userId: sorted[i].userId, name: sorted[i].name, avatar: sorted[i].avatar }],
-            team2: [{ userId: sorted[i + 1].userId, name: sorted[i + 1].name, avatar: sorted[i + 1].avatar }],
-          });
-        }
-      } else {
-        // Doubles: pair highest+lowest ELO as team1, mid pairs as team2
-        // Strategy: team1 = [0,3], team2 = [1,2], then [4,7] vs [5,6] etc.
-        for (let i = 0; i + 3 < sorted.length; i += 4) {
-          const courtIndex = (pairs.length % m.numCourts) + 1;
-          pairs.push({
-            id: pairs.length + 1,
-            court: `Sân ${courtIndex}`,
-            team1: [
-              { userId: sorted[i].userId, name: sorted[i].name, avatar: sorted[i].avatar },
-              { userId: sorted[i + 3].userId, name: sorted[i + 3].name, avatar: sorted[i + 3].avatar },
-            ],
-            team2: [
-              { userId: sorted[i + 1].userId, name: sorted[i + 1].name, avatar: sorted[i + 1].avatar },
-              { userId: sorted[i + 2].userId, name: sorted[i + 2].name, avatar: sorted[i + 2].avatar },
-            ],
-          });
-        }
-      }
-      return { ...m, matches: pairs, status: "in_progress" };
-    }));
-  };
-
-  const handleRecordResult = (matchId: number, result: string, winner: "team1" | "team2") => {
-    setMatchmaking(prev => prev.map(m => {
-      if (m.id !== activeMatchmakingId) return m;
-      const matches = m.matches.map(p => p.id === matchId ? { ...p, result, winner } : p);
-      const allDone = matches.every(p => p.result);
-      return { ...m, matches, status: allDone ? "completed" : m.status };
-    }));
-  };
+  
 
   const handleSaveScore = (scores: Record<string, number>) => {
     setSessions(prev => prev.map(s => s.id !== activeSessionId ? s : {
@@ -248,32 +177,7 @@ export default function App() {
           onBack={() => setScreen("player-home")} onCancelReg={() => { handlePlayerCancelReg(); setScreen("player-home"); }} />;
       case "player-my-sessions":
         return <PlayerMySessionsScreen sessions={sessions} myRegs={myRegs} onSessionTap={id => { setActiveSessionId(id); setScreen("player-session-detail"); }} />;
-      case "player-matches":
-        return <PlayerMatchesScreen challenges={challenges} matchmaking={matchmaking}
-          onCreateChallenge={() => setScreen("player-create-challenge")}
-          onJoinMatchmaking={() => setScreen("player-join-matchmaking")}
-          onChallengeTap={id => { setActiveChallengeId(id); setScreen("player-challenge-detail"); }}
-          onMatchmakingTap={id => { setActiveMatchmakingId(id); setScreen("player-matchmaking-detail"); }} />;
-      case "player-create-challenge":
-        return <PlayerCreateChallengeScreen onBack={() => setScreen("player-matches")} onSubmit={handleCreateChallenge} />;
-      case "player-challenge-detail": {
-        const ch = challenges.find(c => c.id === activeChallengeId)!;
-        return <PlayerChallengeDetailScreen match={ch} onBack={() => setScreen("player-matches")} onAccept={handleChallengeAccept} onDecline={handleChallengeDecline} />;
-      }
-      case "player-join-matchmaking":
-        return <PlayerJoinMatchmakingScreen matchmaking={matchmaking} onBack={() => setScreen("player-matches")} onJoin={id => { handleJoinMatchmaking(id); setScreen("player-matches"); }} />;
-      case "player-matchmaking-detail": {
-        const mm = matchmaking.find(m => m.id === activeMatchmakingId)!;
-        return <PlayerMatchmakingDetailScreen session={mm} onBack={() => setScreen("player-matches")} />;
-      }
-      case "owner-matches":
-        return <OwnerMatchesScreen matchmaking={matchmaking} onCreate={() => setScreen("owner-create-matchmaking")} onTap={id => { setActiveMatchmakingId(id); setScreen("owner-matchmaking-detail"); }} />;
-      case "owner-create-matchmaking":
-        return <OwnerCreateMatchmakingScreen onBack={() => setScreen("owner-matches")} onSave={handleCreateMatchmakingSession} />;
-      case "owner-matchmaking-detail": {
-        const mm = matchmaking.find(m => m.id === activeMatchmakingId)!;
-        return <OwnerMatchmakingDetailScreen session={mm} onBack={() => setScreen("owner-matches")} onArrange={handleArrangeMatches} onRecordResult={handleRecordResult} />;
-      }
+      
       case "leaderboard":
         return <LeaderboardScreen sessions={sessions} role={role} />;
       case "profile":
